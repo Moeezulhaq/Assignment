@@ -6,7 +6,7 @@ echo "Checking if this works" >> file.txt
 #this will add text to a newfile.
 #cat >> file1.txt 
 
-cat << kreative
+cat <<kreative
 hello kreatice text 
 another one 
 and another one
@@ -232,7 +232,7 @@ then
     echo "$filename exists"
 else
     echo "$direct dosent exist"
-fi  '
+fi  
 
 echo "Enter diectory name to check"
 read direct
@@ -242,4 +242,29 @@ then
     echo "$direct exists"
 else
     echo "$direct dosent exist"
-    fi
+    fi 
+
+echo "Enter filename name to check"
+read filename
+
+if [ -d "$filename" ]
+then 
+    echo "$filename exists"
+else
+    echo "$filename dosent exist"
+    fi 
+
+echo "Enter filename from which you wnat to read"
+read filename
+
+if [[ -f "$filename" ]]
+then 
+    while IFS=readn-r line
+    do
+        echo "$line"
+    done < $filename
+else
+    echo "$filename dosent exist"
+fi '
+
+
