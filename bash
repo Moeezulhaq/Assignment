@@ -187,5 +187,59 @@ echo "Enter Hx Number of your choice"
 read Hex
 
 echo -n "The decimal value of $Her is : "
-echo "obase=10; ibase=16; $Hex" | bc '
+echo "obase=10; ibase=16; $Hex" | bc 
 
+declare -r pwdfile=/etc/passwd
+echo $pwdfile
+pwdfile=/etc/abc.txt
+
+echo $pwdfile 
+
+car=('BMW' 'Toyota' 'Honda' 'Rover')
+echo "${car[@]}"
+echo "${car[2]}"
+echo "${!car[@]}" 
+echo "${#car[@]}" 
+#user unset car[2] to remove a variable. 
+#change the value of varable use car[num] 
+
+function funcprint()
+{
+    returningvalue="mmmmmm"
+}
+
+returningvalue="Kuch bhe"
+echo "$returningvalue"
+
+funcprint
+echo $returningvalue 
+
+echo "Enter directory name to check"
+read direct
+
+if [ -d "$direct" ]
+then
+    echo "$direct exists"
+else
+    echo "direct doesnt exist"
+fi 
+
+echo "Enter filename to check"
+read 
+
+if [[ -f "$filename"]]
+then
+    echo "$filename exists"
+else
+    echo "$direct dosent exist"
+fi  '
+
+echo "Enter diectory name to check"
+read direct
+
+if [ -d "$direct" ]
+then 
+    echo "$direct exists"
+else
+    echo "$direct dosent exist"
+    fi
