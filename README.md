@@ -1,2 +1,2 @@
-# Github-trainging
+# PRACTICE
 This if for trainging purpose.
