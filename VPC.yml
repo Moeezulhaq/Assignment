@@ -1,0 +1,261 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+Parameters:
+  MyKeyName:
+    Description: Select the key name from the list
+    Type: AWS::EC2::KeyPair::KeyName
+  MyAvailabilityZone:
+    Description: Select the AZ
+    Type: String
+    Default: us-west-2a
+    AllowedValues:
+      - us-west-2a
+      - us-west-2b    
+      - us-west-2c
+      - us-west-1a
+      - us-west-1b
+      - us-west-1c
+  MyInstanceType:
+    Description: select EC2 instance type from list.
+    Type: String
+    Default: t2.micro
+    AllowedValues:
+      - t2.micro
+      - t2.small
+      - t3.micro
+
+Resources:
+  MyVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+       - Key: Name
+         Value: MyVPC
+  
+  MySecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: My SG with Alltraffic
+      VpcId:
+        Ref: MyVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '0'
+          ToPort: '65535'
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: udp
+          FromPort: '0'          
+          ToPort: '65535'
+          CidrIp: 0.0.0.0/0
+
+  MyInternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+      - Key: Name
+        Value: MyInsternetGateway
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+     VpcId:
+      Ref: MyVPC
+     InternetGatewayId: !Ref MyInternetGateway     
+
+  MyPublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: MyVPC
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: !Ref MyAvailabilityZone
+      Tags:
+      - Key: Name
+        Value:  MyPublicSubnet
+    
+  MyPrivateSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: MyVPC
+      CidrBlock: 10.0.2.0/24
+      AvailabilityZone: !Ref MyAvailabilityZone
+      Tags:
+      - Key: Name
+        Value: MyPrivateSubnet
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:  
+        Ref: MyVPC
+      Tags:
+      - Key: Name
+        Value: PublicRouteTable
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: MyInternetGateway
+    Properties:
+       RouteTableId:
+         Ref: PublicRouteTable
+       DestinationCidrBlock: 0.0.0.0/0
+       GatewayId: !Ref MyInternetGateway
+
+  
+
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:  
+        Ref: MyVPC
+      Tags:
+      - Key: Name
+        Value: PrivateRouteTable
+
+  PrivateRoute:
+    Type: AWS::EC2::Route
+    Properties:
+       RouteTableId:
+         Ref: PrivateRouteTable
+       DestinationCidrBlock: 0.0.0.0/0
+       NatGatewayId: !Ref MyNATGateway
+  
+  PublicSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref MyPublicSubnet
+      RouteTableId: !Ref PublicRouteTable
+
+  PrivateSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref MyPrivateSubnet
+      RouteTableId: !Ref PrivateRouteTable
+
+  MyNATGateway:
+     Type: AWS::EC2::NatGateway
+     Properties:
+        AllocationId:
+           Fn::GetAtt:
+           - EIP
+           - AllocationId
+        SubnetId: !Ref MyPublicSubnet
+        Tags:
+        - Key: Name
+          Value: MyNATGateway
+  EIP:
+     DependsOn: MyInternetGateway
+     Type: AWS::EC2::EIP
+     Properties:
+        Domain: MyVPC
+
+  MyVMInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-0d382e80be7ffdae5
+      InstanceType: !Ref MyInstanceType
+      KeyName: !Ref MyKeyName
+      AvailabilityZone: !Ref MyAvailabilityZone
+      NetworkInterfaces: 
+        - AssociatePublicIpAddress: "true"
+          DeviceIndex: "0"
+          GroupSet: 
+            - Ref: "MySecurityGroup"
+          SubnetId: 
+            Ref: "MyPublicSubnet"
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+          sudo apt-get update -y
+          sudo apt-get upgrade 
+          sudo apt install apache2
+          sudo systemctl status apache2
+          sudo systemctl start apache2
+          sudo systemctl enable apache2
+          sudo apt install php php-mysql php-gd php-cli php-common -y
+          sudo apt install wget unzip -y
+          sudo wget https://wordpress.org/latest.zip
+          sudo unzip latest.zip
+          sudo cp -r wordpress/* /var/www/html/
+          cd /var/www/html
+          sudo chown www-data:www-data -R /var/www/html/
+          sudo rm -rf index.html 
+          sudo apt install mysql-client-core-8.0
+      Tags:
+      - Key: Name
+        Value: MyVMInstance
+
+  MyWebInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-0d382e80be7ffdae5
+      InstanceType: !Ref MyInstanceType
+      KeyName: !Ref MyKeyName
+      AvailabilityZone: !Ref MyAvailabilityZone
+      NetworkInterfaces: 
+        - AssociatePublicIpAddress: "true"
+          DeviceIndex: "0"
+          GroupSet: 
+            - Ref: "MySecurityGroup"
+          SubnetId: 
+            Ref: "MyPublicSubnet"
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+          sudo apt-get update -y
+          sudo apt-get upgrade 
+          sudo apt install apache2
+          sudo systemctl status apache2
+          sudo systemctl start apache2
+          sudo systemctl enable apache2
+          sudo apt install php php-mysql php-gd php-cli php-common -y
+          sudo apt install wget unzip -y
+          sudo wget https://wordpress.org/latest.zip
+          sudo unzip latest.zip
+          sudo cp -r wordpress/* /var/www/html/
+          cd /var/www/html
+          sudo chown www-data:www-data -R /var/www/html/
+          sudo rm -rf index.html 
+          sudo apt install mysql-client-core-8.0
+      Tags:
+      - Key: Name
+        Value: MyWebInstance        
+
+
+  MyDBInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-0d382e80be7ffdae5
+      InstanceType: !Ref MyInstanceType
+      KeyName: !Ref MyKeyName
+      AvailabilityZone: !Ref MyAvailabilityZone
+      NetworkInterfaces: 
+        - AssociatePublicIpAddress: "false"
+          DeviceIndex: "0"
+          GroupSet: 
+            - Ref: "MySecurityGroup"
+          SubnetId: 
+            Ref: "MyPrivateSubnet"
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash 
+          set -x
+          sudo apt update -y
+          sudo apt upgrade -y
+          sudo apt install mysql-server -y
+          sudo mysql -u root 
+          CREATE DATABASE wordpress;
+          CREATE USER 'wordpress'@'%' IDENTIFIED BY 'password';
+          GRANT ALL PRIVILEGES ON *.* TO 'wordpress'@'%';
+          FLUSH PRIVILEGES;
+          exit;
+          sudo sed -i "s/.*bind-address.*/bind-address = 0.0.0.0/" /etc/mysql/mysql.conf.d/mysqld.cnf
+          sudo systemctl restart mysql
+      Tags:
+      - Key: Name
+        Value: MyDBInstance
+ 
+
