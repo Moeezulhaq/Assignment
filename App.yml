@@ -1,0 +1,341 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+Parameters:
+  MyKeyName:
+    Description: Select the key name from the list
+    Type: AWS::EC2::KeyPair::KeyName
+  MyAvailabilityZone:
+    Description: Select the AZ
+    Type: AWS::EC2::AvailabilityZone::Name
+    Default: us-west-2a
+  MyInstanceType:
+    Description: select EC2 instance type from list.
+    Type: String
+    Default: t2.micro
+    AllowedValues:
+      - t2.micro
+      - t2.small
+      - t3.micro
+
+Resources:
+  MyVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+       - Key: Name
+         Value: MyVPC
+  
+  MySecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: My SG with Alltraffic
+      VpcId:
+        Ref: MyVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '0'
+          ToPort: '65535'
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: udp
+          FromPort: '0'          
+          ToPort: '65535'
+          CidrIp: 0.0.0.0/0
+
+  MyInternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+      - Key: Name
+        Value: MyInsternetGateway
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+     VpcId:
+      Ref: MyVPC
+     InternetGatewayId: !Ref MyInternetGateway     
+
+  MyPublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: MyVPC
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: !Ref MyAvailabilityZone
+      Tags:
+      - Key: Name
+        Value:  MyPublicSubnet
+    
+  MyPublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: MyVPC
+      CidrBlock: 10.0.4.0/24
+      AvailabilityZone: us-west-2c
+      Tags:
+      - Key: Name
+        Value:  MyPublicSubnet2
+
+  MyPrivateSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: MyVPC
+      CidrBlock: 10.0.2.0/24
+      AvailabilityZone: !Ref MyAvailabilityZone
+      Tags:
+      - Key: Name
+        Value: MyPrivateSubnet
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:  
+        Ref: MyVPC
+      Tags:
+      - Key: Name
+        Value: PublicRouteTable
+
+  PublicRouteTable2:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:  
+        Ref: MyVPC
+      Tags:
+      - Key: Name
+        Value: PublicRouteTable2
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: MyInternetGateway
+    Properties:
+       RouteTableId:
+         Ref: PublicRouteTable
+       DestinationCidrBlock: 0.0.0.0/0
+       GatewayId: !Ref MyInternetGateway
+
+  PublicRoute2:
+    Type: AWS::EC2::Route
+    DependsOn: MyInternetGateway
+    Properties:
+       RouteTableId:
+         Ref: PublicRouteTable2
+       DestinationCidrBlock: 0.0.0.0/0
+       GatewayId: !Ref MyInternetGateway
+
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:  
+        Ref: MyVPC
+      Tags:
+      - Key: Name
+        Value: PrivateRouteTable
+
+  PrivateRoute:
+    Type: AWS::EC2::Route
+    Properties:
+       RouteTableId:
+         Ref: PrivateRouteTable
+       DestinationCidrBlock: 0.0.0.0/0
+       NatGatewayId: !Ref MyNATGateway
+  
+  PublicSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref MyPublicSubnet
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnetRouteTableAssociation2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref MyPublicSubnet2
+      RouteTableId: !Ref PublicRouteTable2      
+
+  PrivateSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref MyPrivateSubnet
+      RouteTableId: !Ref PrivateRouteTable
+
+  MyNATGateway:
+     Type: AWS::EC2::NatGateway
+     Properties:
+        AllocationId:
+           Fn::GetAtt:
+           - EIP
+           - AllocationId
+        SubnetId: !Ref MyPublicSubnet
+        Tags:
+        - Key: Name
+          Value: MyNATGateway
+  EIP:
+     DependsOn: MyInternetGateway
+     Type: AWS::EC2::EIP
+     Properties:
+        Domain: MyVPC
+
+  MyWebLaunchConfig:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      AssociatePublicIpAddress: "true"
+      ImageId: ami-03d5c68bab01f3496
+      SecurityGroups:
+        - Ref: "MySecurityGroup"
+      InstanceType: !Ref MyInstanceType
+      KeyName: !Ref MyKeyName
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+          sudo apt-get update -y
+          sudo apt-get upgrade 
+          sudo apt install apache2
+          sudo systemctl status apache2
+          sudo systemctl start apache2
+          sudo systemctl enable apache2
+          sudo apt install php php-mysql php-gd php-cli php-common -y
+          sudo apt install wget unzip -y
+          sudo wget https://wordpress.org/latest.zip
+          sudo unzip latest.zip
+          sudo cp -r wordpress/* /var/www/html/
+          cd /var/www/html
+          sudo chown www-data:www-data -R /var/www/html/
+          sudo rm -rf index.html 
+          sudo apt install mysql-client-core-8.0
+      EbsOptimized: "true"      
+
+
+  MyVMLaunchConfig:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      AssociatePublicIpAddress: "true"
+      ImageId: ami-03d5c68bab01f3496
+      SecurityGroups:
+        - Ref: "MySecurityGroup"
+      InstanceType: !Ref MyInstanceType
+      KeyName: !Ref MyKeyName
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+          sudo apt-get update -y
+          sudo apt-get upgrade 
+          sudo apt install apache2
+          sudo systemctl status apache2
+          sudo systemctl start apache2
+          sudo systemctl enable apache2
+          sudo apt install php php-mysql php-gd php-cli php-common -y
+          sudo apt install wget unzip -y
+          sudo wget https://wordpress.org/latest.zip
+          sudo unzip latest.zip
+          sudo cp -r wordpress/* /var/www/html/
+          cd /var/www/html
+          sudo chown www-data:www-data -R /var/www/html/
+          sudo rm -rf index.html 
+          sudo apt install mysql-client-core-8.0
+      EbsOptimized: "true" 
+
+  MyDBLaunchConfig:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      ImageId: ami-03d5c68bab01f3496
+      SecurityGroups:
+        - Ref: "MySecurityGroup"
+      InstanceType: !Ref MyInstanceType
+      KeyName: !Ref MyKeyName
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash 
+          sudo apt update -y
+          sudo apt upgrade -y
+          sudo apt install mysql-server -y
+          sudo mysql -u root 
+          CREATE DATABASE wordpress;
+          CREATE USER 'wordpress'@'%' IDENTIFIED BY 'password';
+          GRANT ALL PRIVILEGES ON *.* TO 'wordpress'@'%';
+          FLUSH PRIVILEGES;
+          exit;
+          sudo sed -i "s/.*bind-address.*/bind-address = 0.0.0.0/" /etc/mysql/mysql.conf.d/mysqld.cnf
+          sudo systemctl restart mysql
+      EbsOptimized: "true" 
+
+  MyWebASG:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      HealthCheckGracePeriod: 30
+      HealthCheckType: ELB
+      MaxSize: '2'
+      MinSize: '1'
+      VPCZoneIdentifier: 
+       - Ref: MyPublicSubnet2
+      LaunchConfigurationName: !Ref MyWebLaunchConfig
+      Tags:
+      - Key: Name
+        PropagateAtLaunch: "true"
+        Value: MyWebInstance
+
+  MyVMASG:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      HealthCheckGracePeriod: 30
+      HealthCheckType: ELB
+      MaxSize: '2'
+      MinSize: '1'
+      VPCZoneIdentifier: 
+       - Ref: MyPublicSubnet
+      LaunchConfigurationName: !Ref MyVMLaunchConfig
+      Tags:
+      - Key: Name
+        PropagateAtLaunch: "true"
+        Value: MyVMInstance  
+  
+  MyDBInstance:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      MaxSize: '2'
+      MinSize: '1'
+      VPCZoneIdentifier:
+       - Ref: MyPrivateSubnet
+      LaunchConfigurationName: !Ref MyDBLaunchConfig
+      Tags:
+      - Key: Name
+        PropagateAtLaunch: "true"
+        Value: MyDBInstance
+ 
+  MyLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Subnets: 
+       - Ref: MyPublicSubnet
+       - Ref: MyPublicSubnet2
+      SecurityGroups:
+        - !Ref MySecurityGroup 
+
+  LoadBalancerListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref MyLoadBalancer
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref MyTargetGroup
+  
+  MyTargetGroup:
+    DependsOn: [MyVMASG,MyWebASG]
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup 
+    Properties:
+      VpcId: !Ref MyVPC
+      Port: 80
+      HealthCheckEnabled: true
+      HealthCheckIntervalSeconds: 30
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 15
+      HealthyThresholdCount: 5
+      Matcher:
+        HttpCode: 302
+      Name: MyTargets
+      Protocol: HTTP
+      TargetType: instance
