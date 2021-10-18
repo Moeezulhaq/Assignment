@@ -1,0 +1,32 @@
+version: "3.3"
+services:
+  flask:
+    build: .
+    container_name: flask
+    # ports:
+    #   - "5000:5000"
+    volumes:
+      - .:/code
+    environment:
+      FLASK_ENV: development
+    restart: on-failure
+
+  redis:
+    image: "redis:alpine"
+  
+  static:
+    build: nginx/.
+    container_name: static
+    # ports:
+    #   - "9080:9080"  
+    restart: on-failure
+
+  reverseproxy:
+    build: reverse_proxy/.
+    depends_on:
+      - flask
+      - static
+    ports:
+      - "8081:80"
+
+
